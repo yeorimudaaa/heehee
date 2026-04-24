@@ -6,7 +6,8 @@
 3. 생성된 이미지를 `heehee/ref/images/`에 저장
 
 > 데스크탑 펫은 200×200px로 표시되므로, 작아도 잘 보이게 단순하고 뚜렷한 실루엣이 중요!
-> 모든 이미지에서 희희는 **오른손에 민들레 꽃**(하얀 꽃잎, 노란 수술, 연두 줄기)을 들고 있어야 함!
+> 모든 이미지에서 희희는 **데이지 꽃**(하얀 꽃잎, 노란 수술, 연두 줄기)을 가지고 있어야 함!
+> **꽃 위치 룰:** 평소엔 **오른손**. 양손 쓰는 포즈(STRETCHING, YAWNING, SURPRISED)에선 **오른쪽 귀에 꽂음**.
 
 ---
 
@@ -104,7 +105,7 @@
 ### NAPPING 상태 (낮잠)
 
 #### S8 — napping.png
-> 눈 감고 자는 포즈 (민들레 꼭 쥔 채)
+> 눈 감고 자는 포즈 (데이지 꼭 쥔 채)
 ```
 3D render, soft plush toy style, fluffy fur texture, cute quokka character, round chubby body, tiny limbs, eyes fully closed sleeping peacefully, pink blush cheeks, light beige fur, clutching a small white daisy flower with yellow center and green stem tightly in right hand even while sleeping, pastel colors, studio lighting, white background, cute kawaii aesthetic, front view, curled up sitting position, head tilted to one side, peaceful sleeping face with gentle smile, cozy and warm feeling
 ```
@@ -112,12 +113,12 @@
 ### STRETCHING 상태 (기지개)
 
 #### S9 — stretching.png
-> 기지개 켜는 포즈
+> 기지개 켜는 포즈. **양손 사용 → 꽃은 오른쪽 귀에 꽂혀 있음**
 ```
-3D render, soft plush toy style, fluffy fur texture, cute quokka character, round chubby body, tiny limbs, small bead eyes squinting half-open, pink blush cheeks, light beige fur, holding a small white daisy flower with yellow center and green stem in right hand while stretching, pastel colors, studio lighting, white background, cute kawaii aesthetic, front view, standing up with both arms raised high above head in a big stretch, yawning slightly, just woke up expression, eyes half open and sleepy
+3D render, soft plush toy style, fluffy fur texture, cute quokka character, round chubby body, tiny limbs, small bead eyes squinting half-open, pink blush cheeks, light beige fur, a small white daisy flower with yellow center and green stem tucked behind right ear, pastel colors, studio lighting, white background, cute kawaii aesthetic, front view, standing up with both arms raised high above head in a big stretch, yawning slightly, just woke up expression, eyes half open and sleepy
 ```
 
-### DROWSY 상태 (졸림 — Phase 2)
+### DROWSY 상태 (졸림 — MVP 승격)
 
 #### S10 — drowsy.png
 > 졸린 표정 + 하품
@@ -173,7 +174,7 @@
 
 ## 체크리스트
 
-**필수 (14장):**
+**필수 (15장 — MVP):**
 - [ ] REF-1 ref-front.png (정면)
 - [ ] REF-2 ref-side.png (옆면)
 - [ ] REF-3 ref-threequarter.png (3/4)
@@ -186,11 +187,15 @@
 - [ ] S6 eating.png (먹는 중)
 - [ ] S7 charging-idle.png (앉아 멍때리기)
 - [ ] S8 napping.png (낮잠)
-- [ ] S9 stretching.png (기지개)
+- [ ] S9 stretching.png (기지개, **꽃은 귀에**)
+- [ ] S10 drowsy.png (졸림 하품) — **MVP 승격됨**
 - [ ] BG1 bg-grassfield.png (풀밭 배경)
 
-**Phase 2 (1장):**
-- [ ] S10 drowsy.png (졸림 하품)
+**추가 권장 (plan.md D1~D10 반영, 복귀 시 프롬프트 추가 필요):**
+- [ ] S11 first-greeting.png (첫 실행 인사 — 데이지를 앞으로 내밀며)
+- [ ] S12 surprised.png (이름 변경 반응, **꽃은 귀에**)
+- [ ] S13 yawning.png (하품 단독, **꽃은 귀에**)
+- [ ] S14 name-dialog-tilt.png (이름 입력 에러 시 머리 갸우뚱)
 
 **선택 소품 (5장):**
 - [ ] P1 prop-grass.png (풀)
@@ -214,6 +219,7 @@
 7. 소품/이펙트는 마지막
 
 ## 팁
-- **민들레 꽃 일관성**: 모든 포즈에서 오른손에 민들레 있어야 함! 빠지면 다시 뽑기
+- **데이지 꽃 일관성**: 평소엔 오른손, 양손 쓰는 포즈(STRETCHING 등)는 **오른쪽 귀에 꽂은 모습**! 빠지면 다시 뽑기
 - **200×200px로 표시됨**: 너무 디테일한 건 안 보임. 실루엣이 뚜렷한 게 중요
 - **배경 제거 필수**: 모든 캐릭터/소품은 투명 배경이어야 데스크탑 위에 자연스러움
+- **이펙트 방향**: HAPPY 이펙트는 하트(E1) 대신 **데이지 꽃잎**으로 — plan.md D2 참조
