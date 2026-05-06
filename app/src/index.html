@@ -151,6 +151,41 @@
     .help-bubble .name-buttons { justify-content: center; } /* 닫기 버튼 가운데 */
     #help-close { background: #a8d89c; color: white; }
 
+    /* 업데이트 알림 — 캐릭터 머리 위에 작은 말풍선 */
+    .update-bubble {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff8e1;
+      border: 1.5px solid #ffd54f;
+      border-radius: 12px;
+      padding: 4px 8px 4px 10px;
+      font-size: 11px;
+      color: #5d4037;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      cursor: pointer;
+      z-index: 6;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      animation: bubble-float 2.4s ease-in-out infinite;
+    }
+    .update-bubble.hidden { display: none; }
+    .update-close {
+      font-size: 14px;
+      color: #999;
+      line-height: 1;
+      padding: 0 2px;
+      cursor: pointer;
+    }
+    .update-close:hover { color: #555; }
+    @keyframes bubble-float {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50%      { transform: translateX(-50%) translateY(-3px); }
+    }
+
     /* 충전 표시 — CHARGING 시 캐릭터 머리 위에 ⚡ 깜빡 */
     .charge-indicator {
       position: absolute;
@@ -342,6 +377,11 @@
       </div>
       <!-- 충전 표시 — CHARGING/NAPPING 시 우상단에 살짝 깜빡 -->
       <div class="charge-indicator">⚡</div>
+      <!-- 업데이트 알림 — 새 버전 있을 때만 표시 -->
+      <div id="update-bubble" class="update-bubble hidden">
+        <span class="update-text">🎁 새 버전 있어!</span>
+        <span class="update-close" id="update-dismiss">×</span>
+      </div>
     </div>
   </div>
 
@@ -1041,6 +1081,86 @@
         }, 1700);
       }).catch(err => console.warn(err));
     }
+
+    // ─── 업데이트 체크 (GitHub Releases) ───
+    const APP_VERSION = '0.1.0';
+    const REPO = 'yeorimudaaa/heehee';
+    const UPDATE_DISMISSED_KEY = 'heehee-update-dismissed-version'; // 사용자가 닫은 버전
+
+    function compareVersion(a, b) {
+      // semver 'major.minor.patch' → a > b ? +1 : a < b ? -1 : 0
+      const pa = a.replace(/^v/, '').split('.').map(Number);
+      const pb = b.replace(/^v/, '').split('.').map(Number);
+      for (let i = 0; i < 3; i++) {
+        const x = pa[i] || 0, y = pb[i] || 0;
+        if (x > y) return 1;
+        if (x < y) return -1;
+      }
+      return 0;
+    }
+
+    async function checkForUpdate() {
+      try {
+        const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+          headers: { 'Accept': 'application/vnd.github+json' },
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const latest = (data.tag_name || '').replace(/^v/, '');
+        if (!latest) return null;
+        if (compareVersion(latest, APP_VERSION) > 0) {
+          return { version: latest, url: data.html_url };
+        }
+        return null;
+      } catch (e) {
+        console.warn('업데이트 체크 실패:', e);
+        return null;
+      }
+    }
+
+    let pendingUpdate = null;
+    function showUpdateBubble(update) {
+      pendingUpdate = update;
+      // 이미 닫은 버전이면 표시 X
+      if (localStorage.getItem(UPDATE_DISMISSED_KEY) === update.version) return;
+      const bubble = document.getElementById('update-bubble');
+      const text = bubble.querySelector('.update-text');
+      text.textContent = `🎁 새 버전 v${update.version}!`;
+      bubble.classList.remove('hidden');
+    }
+
+    function hideUpdateBubble(persistDismiss = false) {
+      const bubble = document.getElementById('update-bubble');
+      bubble.classList.add('hidden');
+      if (persistDismiss && pendingUpdate) {
+        localStorage.setItem(UPDATE_DISMISSED_KEY, pendingUpdate.version);
+      }
+    }
+
+    document.getElementById('update-bubble').addEventListener('click', async (e) => {
+      if (e.target.id === 'update-dismiss') {
+        e.stopPropagation();
+        hideUpdateBubble(true);
+        return;
+      }
+      // 버블 본체 클릭 → GitHub 릴리스 페이지 열기
+      if (pendingUpdate) {
+        const opener = window.__TAURI__?.opener;
+        if (opener?.openUrl) {
+          opener.openUrl(pendingUpdate.url).catch(() => {});
+        } else {
+          // fallback
+          window.open(pendingUpdate.url, '_blank');
+        }
+        hideUpdateBubble(false); // 닫기 (다음 시작에도 보이게)
+      }
+    });
+
+    // 시작 시 5초 후 체크 (UI 안정화 대기)
+    setTimeout(async () => {
+      const update = await checkForUpdate();
+      if (update) showUpdateBubble(update);
+    }, 5000);
 
     // ─── 트레이 메뉴 동적 갱신 (이름 + 상태) ───
     const STATUS_LABELS = {
