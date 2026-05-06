@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>희희</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0) !important;
+      background-color: rgba(0,0,0,0) !important;
+      overflow: hidden;
+      color-scheme: light dark; /* 시스템 모드 따라 회색 자동 X */
+    }
+    :root {
+      background: transparent !important;
+    }
+
+    .heehee-frame {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      cursor: grab;
+      position: relative;
+    }
+    /* 상단 모달 영역 — 평소엔 0px, 모달 열릴 때 창 늘어나며 자동 확장 */
+    .modal-area {
+      width: 100%;
+      flex: 1;
+      position: relative;
+      min-height: 0;
+    }
+    /* 하단 캐릭터 영역 — 항상 240px 고정, 안 줄어듦 */
+    .character-area {
+      width: 100%;
+      height: 240px;
+      flex-shrink: 0;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .heehee-frame:active {
+      cursor: grabbing;
+    }
+
+    .heehee-img {
+      width: 65vw;
+      height: 65vw;        /* 창 너비 기준 정사각형 — padding-top 영향 X */
+      object-fit: contain;
+      will-change: transform;
+      -webkit-user-drag: none;
+      user-select: none;
+      pointer-events: none;
+      transform-origin: 50% 80%;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* ─── 톤 통일 — CSS는 walking 외 상태만 보정 (walking은 JS inline) ─── */
+    /* 충전/낮잠은 살짝 따뜻 */
+    .heehee-frame.state-charging .heehee-img,
+    .heehee-frame.state-napping  .heehee-img {
+      filter: saturate(1.05) brightness(1.02);
+    }
+
+    /* 걷기 bobbing은 JS RAF로 통합 관리 (CSS keyframe 제거) */
+
+    /* 이름 짓기 모달 (D6 — 말풍선 톤) — 모달 영역 안에 absolute로 채움 */
+    .name-modal {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      background: rgba(0,0,0,0);
+    }
+    .name-modal.hidden { display: none; }
+    .name-bubble {
+      background: white;
+      border: 2px solid #a8d89c;
+      border-radius: 16px;
+      padding: 14px 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      width: 80%;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .name-label {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 6px;
+      text-align: center;
+    }
+    #name-input {
+      width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 13px;
+      box-sizing: border-box;
+      outline: none;
+    }
+    #name-input:focus { border-color: #a8d89c; }
+    .name-buttons {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      justify-content: flex-end;
+    }
+    .name-buttons button {
+      border: none;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    #name-cancel { background: #eee; color: #555; }
+    #name-save { background: #a8d89c; color: white; }
+    #name-save:hover { background: #8bc77c; }
+
+    /* 정보 모달 */
+    .info-bubble { text-align: center; }
+    .info-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; color: #333; }
+    .info-divider {
+      height: 1px;
+      background: #e0e0e0;
+      margin: 8px 4px;
+    }
+    .info-line { font-size: 11px; color: #666; margin: 4px 0; line-height: 1.5; }
+    .info-maker { color: #888; font-size: 10px; }
+    #info-close { background: #a8d89c; color: white; }
+
+    /* 사용법 모달 — 첫 실행 + 트레이 */
+    .help-bubble { text-align: left; padding: 12px 14px; }
+    .help-title { font-size: 13px; font-weight: 600; color: #333; text-align: center; margin-bottom: 8px; }
+    .help-divider {
+      height: 1px;
+      background: #e0e0e0;
+      margin: 8px 2px;
+    }
+    .help-section { margin: 12px 0; }
+    .help-section-title { font-size: 11px; font-weight: 600; color: #555; margin-bottom: 4px; }
+    .help-line { font-size: 10px; color: #666; margin: 3px 0; line-height: 1.5; padding-left: 4px; }
+    .help-tagline { font-size: 10px; color: #888; text-align: center; font-style: italic; margin: 8px 0 4px; }
+    .help-bubble .name-buttons { justify-content: center; } /* 닫기 버튼 가운데 */
+    #help-close { background: #a8d89c; color: white; }
+
+    /* 충전 표시 — CHARGING 시 캐릭터 머리 위에 ⚡ 깜빡 */
+    .charge-indicator {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      font-size: 18px;
+      z-index: 5;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.8s ease;
+      filter: drop-shadow(0 0 4px rgba(255, 220, 50, 0.6));
+      transform: translateX(-50%);
+    }
+    .heehee-frame.state-charging .charge-indicator {
+      opacity: 1;
+      animation: charge-pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes charge-pulse {
+      0%, 100% { transform: translateX(-50%) scale(1)    rotate(0deg);  filter: drop-shadow(0 0 4px rgba(255,220,50,0.6)); }
+      50%      { transform: translateX(-50%) scale(1.15) rotate(-3deg); filter: drop-shadow(0 0 8px rgba(255,220,50,1));   }
+    }
+
+    /* HAPPY 점프 — S4 표시 시 통통 튀기 */
+    .heehee-frame.state-happyBounce .heehee-img {
+      animation: happy-bounce 0.45s ease-out 2;
+    }
+    @keyframes happy-bounce {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-18px); }
+    }
+
+    /* HAPPY 꽃잎 이펙트 */
+    .happy-petal {
+      position: absolute;
+      width: 70%;
+      top: 35%;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 4;
+      opacity: 0;
+      animation: petal-rise 1.6s ease-out forwards;
+      -webkit-user-drag: none;
+      user-select: none;
+    }
+    @keyframes petal-rise {
+      0%   { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.5) rotate(0deg); }
+      25%  { opacity: 1; transform: translateX(-50%) translateY(-5px)  scale(1)   rotate(40deg); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-70px) scale(1.1) rotate(180deg); }
+    }
+
+    /* 풀밭 배경 — NAPPING/CHARGING 시 fade-in. 컨테이너보다 크게 + 하단 정렬 */
+    .bg-img {
+      position: absolute;
+      width: 170%;
+      height: 85%;
+      object-fit: contain;
+      object-position: center bottom;
+      bottom: -5%;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 2s ease-out;
+      pointer-events: none;
+      z-index: 1;
+      -webkit-user-drag: none;
+      user-select: none;
+    }
+    .heehee-frame.state-charging .bg-img,
+    .heehee-frame.state-napping  .bg-img {
+      opacity: 0.75;
+    }
+
+    /* ZZZ 이펙트 — NAPPING 시에만 시간차 3개 떠오름 */
+    .zzz-container {
+      position: absolute;
+      top: 5%;
+      left: 55%;
+      width: 50%;
+      height: 60%;
+      pointer-events: none;
+      z-index: 3;
+    }
+    .zzz {
+      position: absolute;
+      width: 30px;
+      opacity: 0;
+      -webkit-user-drag: none;
+      user-select: none;
+    }
+    .zzz-1 { top: 50%; left: 0;   }
+    .zzz-2 { top: 50%; left: 25%; width: 24px; }
+    .zzz-3 { top: 50%; left: 50%; width: 20px; }
+
+    .heehee-frame.state-napping .zzz {
+      animation: zzz-float 2.8s ease-out infinite;
+    }
+    .heehee-frame.state-napping .zzz-2 { animation-delay: 0.9s; }
+    .heehee-frame.state-napping .zzz-3 { animation-delay: 1.8s; }
+
+    @keyframes zzz-float {
+      0%   { opacity: 0; transform: translate(0, 0) scale(0.7); }
+      20%  { opacity: 1; }
+      80%  { opacity: 0.6; }
+      100% { opacity: 0; transform: translate(15px, -50px) scale(1.1); }
+    }
+
+    /* HAPPY 통통 튀기 (Day 9 미리 준비) */
+    .heehee-img.happy {
+      animation: bounce 0.4s ease-out 2 !important;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-12px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="heehee-frame">
+    <!-- 상단 모달 영역 — 평소엔 빈 투명 공간, 이름/정보 모달 표시 시 사용 -->
+    <div class="modal-area">
+      <!-- 이름 짓기 말풍선 모달 (D6) -->
+      <div id="name-modal" class="name-modal hidden">
+        <div class="name-bubble">
+          <div class="name-label">이름 짓기 / 바꾸기</div>
+          <input id="name-input" type="text" maxlength="12" placeholder="희희" />
+          <div class="name-buttons">
+            <button id="name-cancel">취소</button>
+            <button id="name-save">저장</button>
+          </div>
+        </div>
+      </div>
+      <!-- 희희 정보 모달 -->
+      <div id="info-modal" class="name-modal hidden">
+        <div class="name-bubble info-bubble">
+          <div class="info-title">🌼 <span id="info-name">희희</span> v0.1</div>
+          <div class="info-divider"></div>
+          <div class="info-line">오늘도 <span id="info-name-2">희희</span>는 웃고 있어요!</div>
+          <div class="info-divider"></div>
+          <div class="info-line info-maker">🎁 만든 이: 최여름</div>
+          <div class="name-buttons">
+            <button id="info-close">닫기</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 사용법 모달 (첫 실행 + 트레이) -->
+      <div id="help-modal" class="name-modal hidden">
+        <div class="name-bubble help-bubble">
+          <div class="help-title">🌼 희희와 함께 사는 법</div>
+          <div class="help-divider"></div>
+          <div class="help-section">
+            <div class="help-section-title">🐾 평소</div>
+            <div class="help-line">• 클릭 — 데이지 자랑 + 점프</div>
+            <div class="help-line">• 드래그 — 자리 옮기기</div>
+            <div class="help-line">• 마우스 가까이 — 휘리릭 도망</div>
+          </div>
+          <div class="help-section">
+            <div class="help-section-title">⚡ 함께 자기</div>
+            <div class="help-line">• 충전 꽂으면 풀밭 → 5분 후 잠</div>
+            <div class="help-line">• 23시~6시 졸림 (하품 자주)</div>
+          </div>
+          <div class="help-section">
+            <div class="help-section-title">🎀 메뉴바 ↗ 우상단</div>
+            <div class="help-line">• 🌿 풀 주기 / 🌼 이름 짓기</div>
+            <div class="help-line">• 🚶 잠깐 외출 (1시간) / 🏠 돌아와 희희</div>
+            <div class="help-line">• 📖 사용법 (이 화면)</div>
+          </div>
+          <div class="help-divider"></div>
+          <div class="help-tagline">🌼 항상 웃고 있을 테니, 가끔 나를 봐 — 희희</div>
+          <div class="name-buttons">
+            <button id="help-close">좋았어!</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 하단 캐릭터 영역 — 항상 희희가 여기 -->
+    <div class="character-area">
+      <!-- 풀밭 배경 — NAPPING/CHARGING 시 fade-in -->
+      <img id="bg-grass" class="bg-img" src="./assets/heehee/bg1-grassfield.png" alt="" />
+      <!-- 단일 캐릭터 레이어 — 호흡은 CSS 미세 transform -->
+      <img id="heehee" class="heehee-img" alt="희희" src="./assets/heehee/s1-awake-default.png" />
+      <!-- ZZZ 이펙트 — NAPPING 시 시간차 3개 떠오름 -->
+      <div id="zzz-container" class="zzz-container">
+        <img class="zzz zzz-1" src="./assets/heehee/e2-effect-zzz.png" alt="" />
+        <img class="zzz zzz-2" src="./assets/heehee/e2-effect-zzz.png" alt="" />
+        <img class="zzz zzz-3" src="./assets/heehee/e2-effect-zzz.png" alt="" />
+      </div>
+      <!-- 충전 표시 — CHARGING/NAPPING 시 우상단에 살짝 깜빡 -->
+      <div class="charge-indicator">⚡</div>
+    </div>
+  </div>
+
+  <script>
+    // 추가 자산 사전 로드 (NAPPING 시 지연 방지)
+    ['./assets/heehee/bg1-grassfield.png', './assets/heehee/e2-effect-zzz.png'].forEach(src => {
+      const img = new Image();
+      img.src = src;
+    });
+
+    // 상태별 PNG — C-1 하이브리드 (CSS 미세 transform + 호흡 PNG 즉시 교체)
+    // breathFrame: 들숨 PNG (있으면 호흡 사이클 후반에 교체)
+    const STATES = {
+      awake:     { base: './assets/heehee/s1-awake-default.png',    breathFrame: './assets/heehee/s1b-awake-breathe.png',    cycleMs: 3800, bouncePx: 1.5, scaleYAmp: 0.012, baseY: 0   },
+      eyesoft:   { base: './assets/heehee/s1c-awake-eyes-soft.png', breathFrame: null,                                       cycleMs: 3800, bouncePx: 1.5, scaleYAmp: 0.012, baseY: 0   },
+      blinkHalf: { base: './assets/heehee/s2-awake-blink-half.png', breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      blink:     { base: './assets/heehee/s2-awake-blink.png',      breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      eartwitch: { base: './assets/heehee/s3-awake-eartwitch.png',  breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      charging:  { base: './assets/heehee/s7-charging-idle.png',    breathFrame: './assets/heehee/s7b-charging-breathe.png', cycleMs: 4200, bouncePx: 0.5, scaleYAmp: 0.010, baseY: -18 },
+      napping:   { base: './assets/heehee/s8-napping.png',          breathFrame: './assets/heehee/s8b-napping-breathe.png',  cycleMs: 4500, bouncePx: 0,   scaleYAmp: 0.018, baseY: -22 },
+      walking:   { base: './assets/heehee/w1-walking-step1.png',    breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      happyShow: { base: './assets/heehee/s4b-happy-daisy-show.png',breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      happyBounce:{base: './assets/heehee/s4-happy-bounce.png',     breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      // Phase 2 새 상태들
+      greeting:  { base: './assets/heehee/s11-first-greeting.png',  breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      greetShow: { base: './assets/heehee/s11a-first-greeting-show.png', breathFrame: null,                                  cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      hungry:    { base: './assets/heehee/s5-idle-hungry.png',      breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      eating:    { base: './assets/heehee/s6-eating.png',           breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: -10 }, // 앉은 자세
+      grassIdle: { base: './assets/heehee/s6b-awake-with-grass.png',breathFrame: null,                                       cycleMs: 3800, bouncePx: 1.5, scaleYAmp: 0.012, baseY: 0   }, // 풀 들고 다님 (호흡 O)
+      drowsy:    { base: './assets/heehee/s10-drowsy.png',          breathFrame: null,                                       cycleMs: 5000, bouncePx: 1.0, scaleYAmp: 0.014, baseY: 0   }, // 깊은 호흡, 살짝 흔들
+      yawning:   { base: './assets/heehee/s13-yawning.png',         breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      surprised: { base: './assets/heehee/s12-surprised.png',       breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      stretching:{ base: './assets/heehee/s9-stretching.png',       breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+      tilt:      { base: './assets/heehee/s14-name-tilt.png',       breathFrame: null,                                       cycleMs: 0,    bouncePx: 0,   scaleYAmp: 0,     baseY: 0   },
+    };
+
+    // 걷기 사이클 자산 — 4프레임
+    const WALK_FRAMES = [
+      './assets/heehee/w1-walking-step1.png',
+      './assets/heehee/w2-walking-step2.png',
+      './assets/heehee/w3-walking-step3.png',
+      './assets/heehee/w4-walking-step4.png',
+    ];
+
+    // 이미지 사전 로드 (지연 방지)
+    Object.values(STATES).forEach(s => {
+      [s.base, s.breath].filter(Boolean).forEach(src => { const img = new Image(); img.src = src; });
+    });
+
+    const frame   = document.querySelector('.heehee-frame');
+    const heehee  = document.getElementById('heehee');
+    let currentState = 'awake';
+    let breathRAF = null;
+    let breathStartTime = 0;
+    let breathInhaleNow = false; // 현재 들숨 phase인지
+
+    function loadState(state) {
+      currentState = state;
+      const s = STATES[state];
+      heehee.src = s.base;
+      breathInhaleNow = false;
+      frame.className = 'heehee-frame state-' + state;
+      // 트레이 메뉴 상태 갱신 (안정적 상태만)
+      updateTrayMenu();
+
+      // walking 상태는 호흡 정지 (걷기 RAF는 performWalk가 직접 관리)
+      if (state === 'walking') {
+        stopBreathLoop();
+      } else {
+        stopWalkLoop();
+        if (s.cycleMs > 0) {
+          startBreathLoop(s);
+        } else {
+          stopBreathLoop();
+        }
+      }
+    }
+
+    // 걷기 RAF — PNG 사이클 + 캐릭터 translateX + bobbing 통합
+    let walkRAF = null;
+    let walkFrame = 0;
+
+    function stopWalkLoop() {
+      if (walkRAF) cancelAnimationFrame(walkRAF);
+      walkRAF = null;
+    }
+
+    // 진짜 걸어다니기 — 캐릭터 내부 이동 + 좌우 방향에 맞게 PNG 반전
+    async function performWalk(durationMs, totalDx) {
+      stopWalkLoop();
+      loadState('walking');
+
+      // Tauri 창 이동 시도 (있으면 보너스)
+      const tw = window.__TAURI__?.window;
+      const dpi = window.__TAURI__?.dpi || window.__TAURI__?.window;
+      let aw = null, startPos = null, scale = 1, monitorWidth = 0, winWidth = 0;
+      if (tw) {
+        try {
+          aw = tw.getCurrentWindow();
+          startPos = await aw.outerPosition();
+          scale = await aw.scaleFactor();
+          const sz = await aw.outerSize();
+          winWidth = sz.width;
+          const monitor = await tw.currentMonitor();
+          if (monitor) monitorWidth = monitor.size.width;
+        } catch (e) { aw = null; }
+      }
+      const PhysPos = dpi?.PhysicalPosition;
+
+      // ── 화면 경계 안에서만 도망 ──
+      // totalDx, startPos, monitorWidth, winWidth 모두 physical px 단위
+      if (startPos && monitorWidth > 0) {
+        const targetX = startPos.x + totalDx;
+        const maxX = monitorWidth - winWidth; // 오른쪽 경계
+        const minX = 0;                        // 왼쪽 경계
+        const clampedX = Math.max(minX, Math.min(maxX, targetX));
+        totalDx = clampedX - startPos.x;
+      }
+      // 이동 거리가 거의 없으면 walk 스킵 (이미 경계)
+      if (Math.abs(totalDx) < 5) {
+        loadState('awake');
+        return;
+      }
+
+      const flipX = totalDx < 0 ? -1 : 1; // 왼쪽 가면 좌우 반전 → 캐릭터도 왼쪽 향함
+      const startTime = performance.now();
+      let lastFrameSwitch = startTime;
+      // 짧고 빠른 걷기일수록 다리 빨리 — 속도(px/s) 기반으로 프레임 스위치 간격 조정
+      const speedPxPerSec = Math.abs(totalDx) / (durationMs / 1000);
+      const frameSwitchMs = speedPxPerSec > 100 ? 110 : 280; // 휘리릭 vs 어슬렁
+
+      function tick(now) {
+        if (currentState !== 'walking') {
+          heehee.style.transform = '';
+          return;
+        }
+        const elapsed = now - startTime;
+        if (elapsed >= durationMs) {
+          heehee.style.transform = '';
+          loadState('awake');
+          return;
+        }
+
+        // PNG 프레임 교체 (속도에 따라 110ms 또는 280ms)
+        if (now - lastFrameSwitch > frameSwitchMs) {
+          walkFrame = (walkFrame + 1) % WALK_FRAMES.length;
+          heehee.src = WALK_FRAMES[walkFrame];
+          lastFrameSwitch = now;
+        }
+
+        // bobbing
+        const bobT = (elapsed % 700) / 700;
+        const bobPhase = (1 - Math.cos(bobT * Math.PI * 2)) / 2;
+        const bobY = -4 * bobPhase;
+        const rotate = (-1 + 2 * bobPhase) * flipX; // 회전도 방향에 맞게
+
+        // X 이동은 창이 다 처리 (캐릭터가 창 밖으로 안 나가게 charDx=0)
+        const progress = elapsed / durationMs;
+        const eased = 0.5 - 0.5 * Math.cos(progress * Math.PI);
+
+        // 캐릭터는 창 안에서 bobbing + 좌우 반전만 (X 이동 X)
+        heehee.style.transform = `translate(0px, ${bobY}px) scale(${flipX}, 1) rotate(${rotate}deg)`;
+
+        // Tauri 창도 같이 이동
+        if (aw && startPos && PhysPos) {
+          const newX = Math.round(startPos.x + totalDx * eased);
+          aw.setPosition(new PhysPos(newX, startPos.y)).catch(() => {});
+        }
+
+        walkRAF = requestAnimationFrame(tick);
+      }
+      walkFrame = 0;
+      heehee.src = WALK_FRAMES[0];
+      walkRAF = requestAnimationFrame(tick);
+    }
+
+    // SHY_AWAY — 마우스가 캐릭터 영역에 들어오면 부끄러워 반대 방향으로 휘리릭 도망 (3초 쿨다운)
+    // 모달 영역(상단 220px)은 제외 — 그쪽에 마우스 가도 캐릭터는 반응 X
+    let lastShyTime = 0;
+    function setupShyAway() {
+      const charArea = document.querySelector('.character-area');
+      charArea.addEventListener('mouseenter', (e) => {
+        const now = Date.now();
+        if (currentState === 'awake' && (now - lastShyTime > 3000)) {
+          lastShyTime = now;
+          const rect = charArea.getBoundingClientRect();
+          const mouseFromLeft = e.clientX - rect.left;
+          const direction = mouseFromLeft < rect.width / 2 ? 1 : -1; // 마우스 왼쪽이면 오른쪽 도망
+          performWalk(1000, 120 * direction); // 1초간 120px 휘리릭
+        }
+      });
+    }
+
+    // 호흡 — CSS 미세 transform (sine 곡선) + 호흡 PNG 즉시 교체 (C-1 하이브리드)
+    function startBreathLoop(stateConf) {
+      stopBreathLoop();
+      breathStartTime = performance.now();
+      const { cycleMs, bouncePx, scaleYAmp, baseY = 0, base, breathFrame } = stateConf;
+
+      function tick(now) {
+        const elapsed = (now - breathStartTime) % cycleMs;
+        const t = elapsed / cycleMs;
+        const phase = (1 - Math.cos(t * Math.PI * 2)) / 2;
+
+        // CSS 미세 transform
+        const scaleY = 1 + scaleYAmp * phase;
+        const scaleX = 1 + scaleYAmp * 0.3 * phase;
+        const ty = baseY + (-bouncePx * phase);
+        heehee.style.transform = `translateY(${ty}px) scale(${scaleX}, ${scaleY})`;
+
+        // 호흡 PNG 교체는 사용 안 함 — CSS 미세 transform이 가장 자연스러움
+        // (S1b/S7b/S8b 들숨 PNG는 보관 — 다른 용도로 미래 활용 가능)
+
+        breathRAF = requestAnimationFrame(tick);
+      }
+      breathRAF = requestAnimationFrame(tick);
+    }
+
+    function stopBreathLoop() {
+      if (breathRAF) cancelAnimationFrame(breathRAF);
+      breathRAF = null;
+      // walking 상태는 CSS keyframe이 transform을 담당 — 비우기
+      if (currentState === 'walking') {
+        heehee.style.transform = '';
+        return;
+      }
+      // 그 외 상태 — 현재 상태의 baseY 적용
+      const s = STATES[currentState];
+      const baseY = (s && s.baseY) || 0;
+      heehee.style.transform = `translateY(${baseY}px) scale(1, 1)`;
+    }
+
+    // 부드러운 깜빡 — S1 → S2-half → S2 → S2-half → S1 (자세 동일, 눈만 변화)
+    let blinkBusy = false;
+    function blink() {
+      if (currentState !== 'awake' || blinkBusy) return;
+      blinkBusy = true;
+      const prevState = currentState;
+      // 단계별 src 교체 (호흡은 그대로 진행)
+      heehee.src = STATES.blinkHalf.base;
+      setTimeout(() => {
+        if (currentState !== prevState) { blinkBusy = false; return; }
+        heehee.src = STATES.blink.base;
+      }, 80);
+      setTimeout(() => {
+        if (currentState !== prevState) { blinkBusy = false; return; }
+        heehee.src = STATES.blinkHalf.base;
+      }, 180);
+      setTimeout(() => {
+        if (currentState === prevState) {
+          // 깜빡 끝 — 현재 호흡 phase에 맞는 PNG로 복귀
+          const s = STATES[currentState];
+          heehee.src = (breathInhaleNow && s.breathFrame) ? s.breathFrame : s.base;
+        }
+        blinkBusy = false;
+      }, 260);
+    }
+
+    function startBlinkLoop() {
+      function loop() {
+        blink();
+        if (Math.random() < 0.15) {
+          setTimeout(blink, 500);
+        }
+        const next = 3000 + Math.random() * 2500; // 3~5.5초
+        setTimeout(loop, next);
+      }
+      setTimeout(loop, 2000);
+    }
+
+    // 잔잔한 눈 웃음 (S1c) — 10~20초마다 4.5초간
+    function startEyesoftLoop() {
+      function loop() {
+        if (currentState === 'awake') {
+          loadState('eyesoft');
+          setTimeout(() => {
+            if (currentState === 'eyesoft') loadState('awake');
+          }, 4500);
+        }
+        const next = 10000 + Math.random() * 10000; // 10~20초
+        setTimeout(loop, next);
+      }
+      setTimeout(loop, 5000); // 첫 등장 5초 후
+    }
+
+    // 가끔 EAR 쫑긋 (10~18초마다, AWAKE에서만)
+    function startEarTwitchLoop() {
+      function loop() {
+        if (currentState === 'awake') {
+          loadState('eartwitch');
+          setTimeout(() => {
+            if (currentState === 'eartwitch') loadState('awake');
+          }, 1500);
+        }
+        const next = 10000 + Math.random() * 8000;
+        setTimeout(loop, next);
+      }
+      setTimeout(loop, 8000);
+    }
+
+    // ─── 위치 저장/복원 (Day 5) ───
+    const POS_STORAGE_KEY = 'heehee-pos';
+
+    // 우하단 안전 위치 계산
+    async function getBottomRightPos() {
+      const tw = window.__TAURI__?.window;
+      if (!tw) return null;
+      const monitor = await tw.currentMonitor();
+      if (!monitor) return null;
+      const size = await appWindow.outerSize();
+      const scale = await appWindow.scaleFactor();
+      const marginPhys = Math.round(50 * scale);
+      const x = monitor.size.width - size.width - marginPhys;
+      const y = monitor.size.height - size.height - marginPhys * 2;
+      return { x, y, monitor, size };
+    }
+
+    async function restoreSavedPosition() {
+      if (!appWindow) return;
+      const saved = localStorage.getItem(POS_STORAGE_KEY);
+      const dpi = window.__TAURI__?.dpi;
+      const PhysPos = dpi?.PhysicalPosition;
+      if (!PhysPos) return;
+
+      const safe = await getBottomRightPos();
+
+      if (saved && safe) {
+        try {
+          const { x, y } = JSON.parse(saved);
+          // 저장된 위치가 화면 안인지 검증 (창 일부라도 보이게)
+          const m = safe.monitor;
+          const minX = -safe.size.width + 50; // 거의 다 가려지는 건 안 됨
+          const maxX = m.size.width - 50;
+          const minY = 0;
+          const maxY = m.size.height - safe.size.height + 50;
+          if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+            await appWindow.setPosition(new PhysPos(x, y));
+            return;
+          }
+          console.warn('저장된 위치 화면 밖 — 우하단으로 재배치');
+        } catch (e) {
+          console.warn('위치 복원 실패:', e);
+        }
+      }
+
+      // 첫 실행 또는 저장된 위치 무효 → 우하단
+      if (safe) {
+        try {
+          await appWindow.setPosition(new PhysPos(safe.x, safe.y));
+        } catch (e) { console.warn('우하단 배치 실패:', e); }
+      }
+    }
+
+    async function saveCurrentPosition() {
+      if (!appWindow) return;
+      // 모달로 창 늘어나있는 동안 잘못된 좌표 저장 방지
+      if (modalIsExpanding) return;
+      try {
+        const pos = await appWindow.outerPosition();
+        localStorage.setItem(POS_STORAGE_KEY, JSON.stringify({ x: pos.x, y: pos.y }));
+      } catch (e) {}
+    }
+
+    // 5초마다 자동 저장
+    function startPositionAutoSave() {
+      setInterval(saveCurrentPosition, 5000);
+    }
+
+    // ─── 실제 충전 감지 (Day 8) ───
+    // Rust pmset 5초 폴링 → power-changed 이벤트
+    let napTimer = null;
+    const NAP_DELAY_MS = 5 * 60 * 1000; // 5분 후 NAPPING
+
+    function handlePowerChange(isCharging) {
+      // 기존 NAPPING 타이머 취소
+      if (napTimer) { clearTimeout(napTimer); napTimer = null; }
+
+      if (isCharging) {
+        // 충전 시작 — AWAKE/EYESOFT/WALKING에서만 자동 전환
+        if (currentState === 'awake' || currentState === 'eyesoft' || currentState === 'walking') {
+          stopWalkLoop();
+          loadState('charging');
+          // 5분 후 NAPPING
+          napTimer = setTimeout(() => {
+            if (currentState === 'charging') loadState('napping');
+          }, NAP_DELAY_MS);
+        }
+      } else {
+        // 충전 해제 — CHARGING/NAPPING에서 STRETCHING → AWAKE
+        if (currentState === 'charging' || currentState === 'napping') {
+          triggerStretching(); // ⭐ 기지개 켜기
+        }
+      }
+    }
+
+    function setupPowerListener() {
+      const tauriEvent = window.__TAURI__?.event;
+      if (!tauriEvent) {
+        console.warn('Tauri event API 없음 — 충전 감지 미작동');
+        return;
+      }
+      tauriEvent.listen('power-changed', (e) => {
+        handlePowerChange(e.payload);
+      }).catch(err => console.warn('listen 실패:', err));
+    }
+
+    // ─── 이름 짓기 모달 (트레이 메뉴에서 트리거) ───
+    const NAME_KEY = 'heehee-name';
+    const nameModal = document.getElementById('name-modal');
+    const nameInput = document.getElementById('name-input');
+
+    function getCurrentName() {
+      return localStorage.getItem(NAME_KEY) || '희희';
+    }
+
+    // Rust에 모달 상태 알림 (자동저장 가드 + 향후 패스스루용)
+    async function notifyModalState(open) {
+      const tauriCore = window.__TAURI__?.core;
+      if (tauriCore?.invoke) await tauriCore.invoke('set_modal_open', { open }).catch(() => {});
+    }
+
+    // 모달 열고 닫을 때 창 크기 변경 — Rust의 NSWindow.setFrame으로 원자적 (캐릭터 안 튐)
+    let modalIsExpanding = false; // 자동저장 가드
+    let modalExtraPts = 220; // 마지막으로 늘린 양 (shrink 시 같은 값으로 줄임)
+    async function expandWindowForModal(extraPts = 220) {
+      modalIsExpanding = true;
+      modalExtraPts = extraPts;
+      const tauriCore = window.__TAURI__?.core;
+      if (tauriCore?.invoke) {
+        await tauriCore.invoke('resize_for_modal', { expand: true, extraPts }).catch(e => console.warn('expand 실패:', e));
+      }
+    }
+    async function shrinkWindowAfterModal() {
+      const tauriCore = window.__TAURI__?.core;
+      if (tauriCore?.invoke) {
+        await tauriCore.invoke('resize_for_modal', { expand: false, extraPts: modalExtraPts }).catch(e => console.warn('shrink 실패:', e));
+      }
+      modalIsExpanding = false;
+    }
+
+    async function openNameModal() {
+      nameInput.value = getCurrentName();
+      notifyModalState(true);
+      await expandWindowForModal();
+      nameModal.classList.remove('hidden');
+      setTimeout(() => nameInput.focus(), 50);
+    }
+
+    async function closeNameModal() {
+      nameModal.classList.add('hidden');
+      await shrinkWindowAfterModal();
+      notifyModalState(false);
+    }
+
+    async function saveName() {
+      const v = nameInput.value.trim();
+      if (v.length < 1 || v.length > 12) {
+        nameInput.style.borderColor = '#e57373';
+        setTimeout(() => nameInput.style.borderColor = '', 400);
+        triggerTilt(); // S14 갸우뚱 (모달 안 닫힘)
+        return;
+      }
+      localStorage.setItem(NAME_KEY, v);
+      await closeNameModal(); // 창 줄어든 후
+      updateTrayMenu();
+      triggerSurprised(); // ⭐ 깜짝
+    }
+
+    document.getElementById('name-cancel').addEventListener('click', closeNameModal);
+    document.getElementById('name-save').addEventListener('click', saveName);
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveName();
+      if (e.key === 'Escape') closeNameModal();
+    });
+
+    // ─── Phase 2: 새 인터랙션들 ───
+
+    // ── FIRST_GREETING (최초 1회) ──
+    const FIRST_LAUNCH_KEY = 'heehee-first-launch-done';
+    function triggerFirstGreeting() {
+      if (localStorage.getItem(FIRST_LAUNCH_KEY)) return; // 이미 했음
+      stopBreathLoop();
+      stopWalkLoop();
+      // S11 (소심한 인사) 1.5s → S11a (자랑) 2.5s → AWAKE → 사용법 자동 표시
+      loadState('greeting');
+      setTimeout(() => {
+        if (currentState === 'greeting') loadState('greetShow');
+      }, 1500);
+      setTimeout(() => {
+        if (currentState === 'greetShow') {
+          loadState('awake');
+          localStorage.setItem(FIRST_LAUNCH_KEY, '1');
+          // 첫 실행 → 0.6초 후 사용법 자동 표시 (1회만)
+          if (!localStorage.getItem(ONBOARDED_KEY)) {
+            setTimeout(() => openHelpModal(), 600);
+          }
+        }
+      }, 4000);
+    }
+
+    // ── 풀 먹이기 인터랙션 (held_item swap) ──
+    const HELD_ITEM_KEY = 'heehee-held-item';      // 'daisy' or 'grass'
+    const FED_DATE_KEY = 'heehee-fed-date';        // YYYY-MM-DD 마지막 먹은 날짜
+
+    function getHeldItem() {
+      // 자정 지났으면 데이지로 자동 복귀
+      const fedDate = localStorage.getItem(FED_DATE_KEY);
+      const today = new Date().toISOString().slice(0, 10);
+      if (fedDate && fedDate !== today) {
+        localStorage.setItem(HELD_ITEM_KEY, 'daisy');
+        localStorage.removeItem(FED_DATE_KEY);
+      }
+      return localStorage.getItem(HELD_ITEM_KEY) || 'daisy';
+    }
+
+    function feedGrass() {
+      if (currentState !== 'awake' && currentState !== 'eyesoft' && currentState !== 'grassIdle') return;
+      stopBreathLoop();
+      stopWalkLoop();
+      // S5 (먹고 싶다) 0.7s → S6 (먹는 중) 1.6s → S6b (들고 다님) — 자정 지나면 복귀
+      loadState('hungry');
+      setTimeout(() => {
+        if (currentState !== 'hungry') return;
+        loadState('eating');
+      }, 700);
+      setTimeout(() => {
+        if (currentState !== 'eating') return;
+        localStorage.setItem(HELD_ITEM_KEY, 'grass');
+        localStorage.setItem(FED_DATE_KEY, new Date().toISOString().slice(0, 10));
+        loadState('grassIdle');
+      }, 2300);
+    }
+
+    // 자정 지나면 풀 → 데이지 복귀 (1분마다 체크)
+    function startMidnightCheck() {
+      setInterval(() => {
+        const fedDate = localStorage.getItem(FED_DATE_KEY);
+        const today = new Date().toISOString().slice(0, 10);
+        if (fedDate && fedDate !== today) {
+          localStorage.setItem(HELD_ITEM_KEY, 'daisy');
+          localStorage.removeItem(FED_DATE_KEY);
+          if (currentState === 'grassIdle') loadState('awake');
+        }
+      }, 60 * 1000);
+    }
+
+    // ── DROWSY (밤 11시~6시) ──
+    function isNightTime() {
+      const h = new Date().getHours();
+      return h >= 23 || h < 6;
+    }
+
+    function startDrowsyCheck() {
+      setInterval(() => {
+        if (isNightTime() && currentState === 'awake') {
+          loadState('drowsy');
+        } else if (!isNightTime() && currentState === 'drowsy') {
+          loadState('awake');
+        }
+      }, 60 * 1000); // 1분마다 체크
+    }
+
+    // ── YAWNING (자발적 — AWAKE 45분에 1회 / DROWSY 15분에 1회) ──
+    function triggerYawn() {
+      const validStates = ['awake', 'eyesoft', 'drowsy', 'grassIdle'];
+      if (!validStates.includes(currentState)) return;
+      const prev = currentState;
+      stopBreathLoop();
+      loadState('yawning');
+      setTimeout(() => {
+        if (currentState === 'yawning') loadState(prev === 'eyesoft' ? 'awake' : prev);
+      }, 1500);
+    }
+
+    function startYawnLoop() {
+      function loop() {
+        triggerYawn();
+        const isDrowsyMode = currentState === 'drowsy';
+        const next = isDrowsyMode
+          ? (60 * 1000) + Math.random() * (60 * 1000)            // 1~2분 (DROWSY)
+          : (3 * 60 * 1000) + Math.random() * (3 * 60 * 1000);   // 3~6분 (AWAKE)
+        setTimeout(loop, next);
+      }
+      // 첫 시도 30초~1분 후 (친구가 빨리 만나도록)
+      setTimeout(loop, 30 * 1000 + Math.random() * 30 * 1000);
+    }
+
+    // ── SURPRISED (이름 변경 시) ──
+    function triggerSurprised() {
+      const prev = currentState;
+      stopBreathLoop();
+      stopWalkLoop();
+      loadState('surprised');
+      setTimeout(() => {
+        if (currentState === 'surprised') loadState('awake');
+      }, 1800);
+    }
+
+    // ── STRETCHING (충전 해제 시) — S10(졸린 듯 깨어남) → S9(기지개) → AWAKE ──
+    function triggerStretching() {
+      stopBreathLoop();
+      stopWalkLoop();
+      loadState('drowsy'); // S10 — 막 깬 졸린 표정
+      setTimeout(() => {
+        if (currentState === 'drowsy') loadState('stretching'); // S9 — 진짜 기지개
+      }, 350);
+      setTimeout(() => {
+        if (currentState === 'stretching') loadState('awake');
+      }, 1100);
+    }
+
+    // ── S14 갸우뚱 (이름 검증 실패 시) ──
+    let tiltTimer = null;
+    function triggerTilt() {
+      const prev = currentState;
+      if (tiltTimer) clearTimeout(tiltTimer);
+      stopBreathLoop();
+      loadState('tilt');
+      tiltTimer = setTimeout(() => {
+        if (currentState === 'tilt') loadState('awake');
+      }, 1500);
+    }
+
+    // ─── 정보 모달 ───
+    const infoModal = document.getElementById('info-modal');
+    async function openInfoModal() {
+      const n = getCurrentName();
+      document.getElementById('info-name').textContent = n;
+      const n2 = document.getElementById('info-name-2');
+      if (n2) n2.textContent = n;
+      notifyModalState(true);
+      await expandWindowForModal();
+      infoModal.classList.remove('hidden');
+    }
+    async function closeInfoModal() {
+      infoModal.classList.add('hidden');
+      await shrinkWindowAfterModal();
+      notifyModalState(false);
+    }
+    document.getElementById('info-close').addEventListener('click', closeInfoModal);
+
+    // ─── 사용법 모달 (첫 실행 + 트레이) ───
+    const HELP_EXTRA_PX = 380; // 사용법은 내용 많아서 더 큰 영역 필요 (스페이싱 포함)
+    const ONBOARDED_KEY = 'heehee-onboarded';
+    const helpModal = document.getElementById('help-modal');
+    async function openHelpModal() {
+      notifyModalState(true);
+      await expandWindowForModal(HELP_EXTRA_PX);
+      helpModal.classList.remove('hidden');
+    }
+    async function closeHelpModal() {
+      helpModal.classList.add('hidden');
+      localStorage.setItem(ONBOARDED_KEY, '1'); // 닫으면 onboarding 완료
+      await shrinkWindowAfterModal();
+      notifyModalState(false);
+    }
+    document.getElementById('help-close').addEventListener('click', closeHelpModal);
+
+    function setupTrayListener() {
+      const tauriEvent = window.__TAURI__?.event;
+      if (!tauriEvent) return;
+      tauriEvent.listen('tray-rename', () => openNameModal())
+        .catch(err => console.warn(err));
+      tauriEvent.listen('tray-info', () => openInfoModal())
+        .catch(err => console.warn(err));
+      tauriEvent.listen('tray-feed', () => feedGrass())
+        .catch(err => console.warn(err));
+      tauriEvent.listen('tray-help', () => openHelpModal())
+        .catch(err => console.warn(err));
+      // 마실 보내기 — 데이지 흔들며 작별 (S4b 0.6초) → hide → 1시간 후 / 부르면 즉시 복귀
+      tauriEvent.listen('tray-sleep', async () => {
+        // S4b만 잠깐 보여주고 사라짐
+        if (currentState === 'awake' || currentState === 'eyesoft') {
+          stopBreathLoop();
+          stopWalkLoop();
+          loadState('happyShow');
+        }
+        setTimeout(async () => {
+          const tauriCore = window.__TAURI__?.core;
+          if (tauriCore?.invoke) await tauriCore.invoke('go_to_sleep').catch(() => {});
+        }, 600);
+      }).catch(err => console.warn(err));
+      // 돌아옴 — HAPPY 점프 + 꽃잎 (다녀왔어!)
+      tauriEvent.listen('tray-wake', () => {
+        // 직접 HAPPY 시퀀스 (state 검증 없이 강제로)
+        stopBreathLoop();
+        stopWalkLoop();
+        loadState('happyShow');
+        setTimeout(() => {
+          if (currentState === 'happyShow') {
+            loadState('happyBounce');
+            spawnPetals();
+          }
+        }, 700);
+        setTimeout(() => {
+          if (currentState === 'happyBounce') loadState('awake');
+        }, 1700);
+      }).catch(err => console.warn(err));
+    }
+
+    // ─── 트레이 메뉴 동적 갱신 (이름 + 상태) ───
+    const STATUS_LABELS = {
+      awake:       '👫 같이 있는 중',
+      eyesoft:     '😆 행복해하는 중',
+      walking:     '🐾 어슬렁거리는 중',
+      charging:    '🔌 충전 중',
+      napping:     '💤 자는 중',
+      happyShow:   '🌼 데이지 자랑 중',
+      happyBounce: '😆 행복해하는 중',
+      greeting:    '🙇 인사하는 중',
+      greetShow:   '🌼 데이지 선물 중',
+      hungry:      '🌿 풀 보는 중',
+      eating:      '🌿 풀 먹는 중',
+      grassIdle:   '🌿 풀 들고 다니는 중',
+      drowsy:      '🥱 졸린 중',
+      yawning:     '🥱 하품 중',
+      surprised:   '😯 놀란 중',
+      stretching:  '🙆 기지개',
+      tilt:        '🤔 갸우뚱',
+    };
+
+    async function updateTrayMenu() {
+      const tauriCore = window.__TAURI__?.core;
+      if (!tauriCore?.invoke) return;
+      const label = STATUS_LABELS[currentState];
+      if (!label) return; // transient 상태 (blink, eartwitch 등)는 업데이트 X
+      try {
+        await tauriCore.invoke('update_tray_menu', {
+          name: getCurrentName(),
+          status: label,
+        });
+      } catch (e) {}
+    }
+
+    // ─── Tauri 윈도우 핸들 (다른 함수들이 사용하므로 먼저 선언) ───
+    const tauriWindow = window.__TAURI__?.window;
+    const appWindow = tauriWindow?.getCurrentWindow();
+
+    // 시작
+    (async () => {
+      await restoreSavedPosition();
+    })();
+
+    loadState('awake');
+    startBlinkLoop();
+    // startEarTwitchLoop(); // 제거 — 안 어울려서 비활성화 (디버그 키 3은 남겨둠)
+    startEyesoftLoop();
+    setupShyAway();
+    startPositionAutoSave();
+    setupPowerListener();
+    setupTrayListener();
+
+    // Phase 2 시작 — FIRST_GREETING (최초 1회) + 백그라운드 체크
+    setTimeout(triggerFirstGreeting, 800); // 다른 시작 후 0.8초 뒤
+    startMidnightCheck();
+    startDrowsyCheck();
+    startYawnLoop();
+
+    // ─── 클릭(쓰다듬기) vs 드래그(이동) 구분 ───
+    let downX = 0, downY = 0, downTime = 0, dragStarted = false;
+    const DRAG_THRESHOLD_PX = 5;
+    const CLICK_MAX_MS = 400;
+
+    let mouseDownTarget = null;
+    document.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      downX = e.screenX;
+      downY = e.screenY;
+      downTime = Date.now();
+      dragStarted = false;
+      mouseDownTarget = e.target;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (downTime === 0 || dragStarted || !appWindow) return;
+      const dist = Math.hypot(e.screenX - downX, e.screenY - downY);
+      if (dist > DRAG_THRESHOLD_PX) {
+        // 모달 안에서 시작한 드래그면 창 이동 X (input 텍스트 선택 등 허용)
+        const isInModal = mouseDownTarget && mouseDownTarget.closest('.name-modal');
+        if (!isInModal) {
+          dragStarted = true;
+          appWindow.startDragging().catch(() => {});
+        }
+      }
+    });
+
+    document.addEventListener('mouseup', (e) => {
+      if (downTime === 0) return;
+      const elapsed = Date.now() - downTime;
+      const wasDrag = dragStarted;
+      const target = mouseDownTarget;
+      downTime = 0;
+      dragStarted = false;
+      mouseDownTarget = null;
+      if (!wasDrag && elapsed < CLICK_MAX_MS) {
+        // 캐릭터 영역 클릭일 때만 HAPPY (모달 버튼/input 클릭은 제외)
+        const charArea = document.querySelector('.character-area');
+        if (charArea && target && charArea.contains(target)) {
+          triggerHappy();
+        }
+      }
+    });
+
+    // ─── HAPPY 시퀀스 (친구 훅) ───
+    function triggerHappy() {
+      if (currentState !== 'awake' && currentState !== 'eyesoft') return;
+      stopWalkLoop();
+      stopBreathLoop();
+
+      // opacity/transition 초기화 (이전 HAPPY 잔재 정리)
+      heehee.style.transition = '';
+      heehee.style.opacity = '1';
+
+      // 1. AWAKE → S4b 데이지 자랑
+      loadState('happyShow');
+      // 2. → S4 점프 + 꽃잎 (700ms 후)
+      setTimeout(() => {
+        if (currentState === 'happyShow') {
+          loadState('happyBounce');
+          spawnPetals();
+        }
+      }, 700);
+      // 3. → AWAKE 복귀 (총 1.7초)
+      setTimeout(() => {
+        if (currentState === 'happyBounce') loadState('awake');
+      }, 1700);
+    }
+
+    // 꽃잎 이펙트 — E_petals PNG 한 장 위로 떠오름 (character-area 기준)
+    function spawnPetals() {
+      const petal = document.createElement('img');
+      petal.src = './assets/heehee/e-petals-daisy.png';
+      petal.className = 'happy-petal';
+      petal.alt = '';
+      const charArea = document.querySelector('.character-area');
+      charArea.appendChild(petal);
+      setTimeout(() => petal.remove(), 1700);
+    }
+
+    // 디버깅 — 키보드로 상태 전환
+    // 0: FIRST_GREETING / 1: AWAKE / 2: BLINK / 3: EAR / 4: HAPPY / 5: WALKING
+    // 7: CHARGE / 8: NAP / 9: DROWSY / y: YAWN / s: SURPRISED / t: STRETCH / f: FEED
+    document.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        case '0':
+          localStorage.removeItem(FIRST_LAUNCH_KEY);
+          triggerFirstGreeting();
+          break;
+        case '1': loadState('awake'); break;
+        case '2': blink(); break;
+        case '3': loadState('eartwitch'); break;
+        case '4': triggerHappy(); break;
+        case '5': performWalk(4500, (Math.random() < 0.5 ? -1 : 1) * 80); break;
+        case '7': loadState('charging'); break;
+        case '8': loadState('napping'); break;
+        case '9': loadState('drowsy'); break;
+        case 'y': triggerYawn(); break;
+        case 's': triggerSurprised(); break;
+        case 't': triggerStretching(); break;
+        case 'f': feedGrass(); break;
+      }
+    });
+  </script>
+</body>
+</html>

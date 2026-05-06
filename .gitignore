@@ -1,0 +1,27 @@
+# Tauri / Rust
+app/src-tauri/target/
+**/target/
+
+# Node / Bun
+app/node_modules/
+node_modules/
+bun.lockb
+bun.lock
+
+# macOS
+.DS_Store
+
+# Build output (배포용 dmg/app은 GitHub Release로 업로드)
+app/src-tauri/target/release/
+app/src-tauri/gen/
+
+# 이미지 자산 백업 (개발 중에만 필요)
+app/src/assets/heehee/_backup_pre_tone/
+
+# IDE
+.vscode/
+.idea/
+
+# Sensitive
+.env
+.env.local
